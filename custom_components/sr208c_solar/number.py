@@ -36,7 +36,7 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         self._attr_native_max_value = 100
         self._attr_native_step = 1
         self._attr_entity_category = EntityCategory.CONFIG
-        self._attr_icon = "mdi:thermometer-off
+        self._attr_icon = "mdi:thermometer-off"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
