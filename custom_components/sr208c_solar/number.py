@@ -28,7 +28,7 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         self._connector = connector
         self._device_id = device_id
         
-        self._attr_name = "SR208C Cutoff Temperature"
+        self._attr_name = "Heater Cutoff Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
         
         # Safe thermal cutoff boundaries for SR208C plumbing loops

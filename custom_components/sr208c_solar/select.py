@@ -28,7 +28,7 @@ class SR208CModeSelect(CoordinatorEntity, SelectEntity):
         self._connector = connector
         self._device_id = device_id
         
-        self._attr_name = "SR208C Operation Mode"
+        self._attr_name = "Operation Mode"
         self._attr_unique_id = f"{device_id}_select_mode"
         self._attr_options = ["cold", "heating", "auto"]
         self._attr_icon = "mdi:tune"

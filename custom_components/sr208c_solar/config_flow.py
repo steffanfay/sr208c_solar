@@ -10,7 +10,7 @@ class SR208CConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial setup form step."""
         errors = {}
         if user_input is not None:
-            return self.async_create_entry(title="Solar Controller", data=user_input)
+            return self.async_create_entry(title="Solar Water Heater", data=user_input)
 
         data_schema = vol.Schema({
             vol.Required("api_key"): str,

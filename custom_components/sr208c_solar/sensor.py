@@ -31,7 +31,7 @@ class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
         self._standard_code = standard_code
         self._numeric_fallback = numeric_fallback
         
-        self._attr_name = f"SR208C {sensor_name}"
+        self._attr_name = f"{sensor_name}"
         self._attr_unique_id = f"{device_id}_sensor_{standard_code}"
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT

@@ -29,7 +29,7 @@ class SR208CSystemSwitch(CoordinatorEntity, SwitchEntity):
         self._device_id = device_id
         
         # Unique identifying parameters for the Home Assistant entity registry
-        self._attr_name = "SR208C System Power"
+        self._attr_name = "Heater Relay State HR"
         self._attr_unique_id = f"{device_id}_switch_main"
         self._attr_icon = "mdi:water-boiler"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
