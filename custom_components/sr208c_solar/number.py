@@ -3,7 +3,6 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.const import UnitOfTemperature, NumberDeviceClass
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,16 +28,13 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         self._connector = connector
         self._device_id = device_id
         
-        self._attr_name = "Heater Set Temperature"
+        self._attr_name = "Heater Cutoff Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
-        #self._attr_device_class = NumberDeviceClass.TEMPERATURE
-        #self._attr_unit_of_measurement = UnitOfTemperature.CELSIUS
-
-        # Safe thermal set boundaries for SR208C plumbing loops
+        
+        # Safe thermal cutoff boundaries for SR208C plumbing loops
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1
-        #self._attr_icon = "mdi:thermometer-off"
         self._attr_entity_category = EntityCategory.CONFIG 
 
         self._attr_device_info = DeviceInfo(
@@ -51,7 +47,7 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> float:
-        """Pull the active set configuration value straight from coordinator database memory."""
+        """Pull the active cutoff configuration value straight from coordinator database memory."""
         device_data = self.coordinator.data.get(self._device_id, {})
         val = device_data.get("temp_set")
         if val is None:
@@ -86,6 +82,6 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         try:
             response = self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
             if not response or not response.get("success"):
-                _LOGGER.error("Tuya Cloud rejected target set temperature update payload: %s", response)
+                _LOGGER.error("Tuya Cloud rejected target cutoff temperature update payload: %s", response)
         except Exception as err:
             _LOGGER.error("Failed to commit target slider change back to SR208C panel hardware: %s", err)
