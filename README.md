@@ -41,6 +41,11 @@ Unlike basic read-only alternatives, this repository employs a centralized **Dat
 
 ## Configuration
 
+- A Tua ya Cloud Developer account is required to obtain your **API Key** and **API Secret**. 
+- You can create an account and register your device at [https://iot.tuya.com](https://iot.tuya.com).
+- Registering your device will provide you with the necessary **Device ID** for integration.
+- Set your device to **Controllable** mode in the Tuya Developer Portal to enable full read/write access.
+
 ### **Option 1: UI Setup (Recommended)**
 1. Navigate to **Settings → Devices & Services → Add Integration**.
 2. Search for **SR208C Solar Water Heater**.
@@ -60,8 +65,9 @@ sr208c_solar:
   api_key: "your_tuya_developer_api_key"
   api_secret: "your_tuya_developer_api_secret"
   region: "us"
-  device_ids:
-    - "your_device_ids_comma_separated"
+    device_ids:
+      - "device_id_1"
+      - "device_id_2"
 ```
 *Note: Restart your Home Assistant instance after saving your changes to the `configuration.yaml` file.*
 
