@@ -2,6 +2,7 @@ import logging
 from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1
+        self._attr_entity_category = EntityCategory.CONFIG 
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
