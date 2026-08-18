@@ -3,7 +3,7 @@ from homeassistant import config_entries
 from .const import DOMAIN
 
 class SR208CConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for SR208C Solar Thermal Controller."""
+    """Handle a config flow for SR208C Solar Water Heater."""
     VERSION = 1
 
     async def async_step_user(self, user_input=None):

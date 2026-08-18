@@ -36,11 +36,11 @@ class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_icon = "mdi:water-boiler"
+        self._attr_icon = "mdi:thermometer"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
-            name="SR208C Solar Thermal Controller",
+            name="SR208C Solar Water Heater",
             manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
             model="SR208C",
             sw_version="Tuya Wi-Fi v1.0",

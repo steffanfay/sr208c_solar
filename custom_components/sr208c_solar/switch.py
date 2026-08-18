@@ -31,12 +31,12 @@ class SR208CSystemSwitch(CoordinatorEntity, SwitchEntity):
         # Unique identifying parameters for the Home Assistant entity registry
         self._attr_name = "SR208C System Power"
         self._attr_unique_id = f"{device_id}_switch_main"
-        self._attr_icon = "mdi:solar-power"
+        self._attr_icon = "mdi:water-boiler"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
-            name="SR208C Solar Thermal Controller",
+            name="SR208C Solar Water Heater",
             manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
             model="SR208C",
             sw_version="Tuya Wi-Fi v1.0",

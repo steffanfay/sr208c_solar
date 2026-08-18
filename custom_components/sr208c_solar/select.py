@@ -36,7 +36,7 @@ class SR208CModeSelect(CoordinatorEntity, SelectEntity):
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
-            name="SR208C Solar Thermal Controller",
+            name="SR208C Solar Water Heater",
             manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
             model="SR208C",
             sw_version="Tuya Wi-Fi v1.0",
