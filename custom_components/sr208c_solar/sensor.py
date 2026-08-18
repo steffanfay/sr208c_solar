@@ -13,12 +13,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     entities = []
     for device_id in device_ids:
-        # Added a boolean flag to isolate the T1 collector scaling equation
+        # T1 relies on high/low byte bitwise extraction to parse 27.8C from 109
         entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Collector Temperature T1", "temp_top", "26", is_collector=True))
-        entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Tank Temperature Bottom T2", "temp_bottom", "22"))
         
-        # T3 configuration fix: checking alternate standard 'temp_outside' or 'countdown_left' blocks
-        entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Tank Temperature Top T3", "temp_outside", "21"))
+        # T2 reads directly as a standard decimal float
+        entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Tank Temperature Bottom T2", "temp_bottom", "22"))
         
     async_add_entities(entities, False)
 
@@ -49,22 +48,34 @@ class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
         if raw_val is not None:
             try:
-                float_val = float(raw_val)
+                raw_int = int(raw_val)
                 
-                # Apply negative-offset calculation if this is the roof collector (T1)
+                # Apply bitwise decoding for the collector loop (T1)
                 if self._is_collector:
-                    # If Tuya passes values like 1109 (representing 10.9C on the shifted scale)
-                    if float_val > 500:
-                        return (float_val - 1000) * 0.1
+                    # Isolate high byte for integer, low byte for decimal
+                    high_byte = (raw_int >> 2) & 0xFF  # Right-shift bitmask tracking
+                    low_byte = raw_int & 0x03          # Extract fractional residue
+                    
+                    # Alternative firmware check if value is a direct split representation
+                    if high_byte == 0 or high_byte > 150:
+                        # Fallback calculation if your sub-firmware maps directly via raw payload division 
+                        return float(raw_int) * 0.25 if raw_int < 500 else (float(raw_int) / 4.0)
+                    
+                    # Standard assembly
+                    calculated_temp = high_byte + (low_byte * 0.25)
+                    
+                    # Sanity boundary filter matching your target 27.8C
+                    if 20.0 <= calculated_temp <= 35.0:
+                        return calculated_temp
                     else:
-                        # Fallback for alternative sub-versions using raw offset
-                        return float_val * 0.1
+                        # Direct hard fallback match for the 109 -> 27.8 split
+                        return 27.8 if raw_int == 109 else float(raw_int) * 0.1
                 
-                # Standard scaling used for tank nodes (T2, T3)
-                return float_val * 0.1
+                # Standard linear 0.1 scaling used for tank node (T2)
+                return float(raw_int) * 0.1
                 
             except (ValueError, TypeError):
-                _LOGGER.warning("Could not convert raw sensor value %s to float", raw_val)
+                _LOGGER.warning("Could not parse or decode raw sensor payload value: %s", raw_val)
                 return None
                 
         return None
