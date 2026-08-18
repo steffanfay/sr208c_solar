@@ -1,6 +1,7 @@
 import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.device_registry import DeviceInfo
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +30,15 @@ class SR208CSystemSwitch(CoordinatorEntity, SwitchEntity):
         # Unique identifying parameters for the Home Assistant entity registry
         self._attr_name = "SR208C System Power"
         self._attr_unique_id = f"{device_id}_switch_main"
+        self._attr_icon = "mdi:solar-power"
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
+            name="SR208C Solar Thermal Controller",
+            manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
+            model="SR208C",
+            sw_version="Tuya Wi-Fi v1.0",
+        )
 
     @property
     def is_on(self) -> bool:

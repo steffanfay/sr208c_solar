@@ -1,6 +1,7 @@
 import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.device_registry import DeviceInfo
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +30,15 @@ class SR208CModeSelect(CoordinatorEntity, SelectEntity):
         self._attr_name = "SR208C Operation Mode"
         self._attr_unique_id = f"{device_id}_select_mode"
         self._attr_options = ["cold", "heating", "auto"]
+        self._attr_icon = "mdi:tune"
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
+            name="SR208C Solar Thermal Controller",
+            manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
+            model="SR208C",
+            sw_version="Tuya Wi-Fi v1.0",
+        )
 
     @property
     def current_option(self) -> str:
