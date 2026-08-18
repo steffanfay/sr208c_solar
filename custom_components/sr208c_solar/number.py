@@ -1,53 +1,76 @@
 import logging
 from homeassistant.components.number import NumberEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up the SR208C temperature configuration slider."""
+    """Set up the SR208C slider parameters via the central data coordinator."""
     connector = hass.data[DOMAIN][entry.entry_id]["connector"]
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     device_ids = hass.data[DOMAIN][entry.entry_id]["device_ids"]
     
     entities = []
     for device_id in device_ids:
-        entities.append(SR208CTargetTempSlider(connector, device_id))
+        entities.append(SR208CTargetTempSlider(coordinator, connector, device_id))
         
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
-class SR208CTargetTempSlider(NumberEntity):
-    """Slider interface for target heating thresholds."""
+class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
+    """Slider interface for target heating thresholds linked via Coordinator."""
 
-    def __init__(self, connector, device_id):
+    def __init__(self, coordinator, connector, device_id):
+        """Initialize the target temperature configuration slider."""
+        super().__init__(coordinator)
         self._connector = connector
         self._device_id = device_id
+        
         self._attr_name = "SR208C Cutoff Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
         
-        # Physical slider boundaries for solar configurations
+        # Safe thermal cutoff boundaries for SR208C plumbing loops
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1
-        self._attr_native_value = 50
+
+    @property
+    def native_value(self) -> float:
+        """Pull the active cutoff configuration value straight from coordinator database memory."""
+        device_data = self.coordinator.data.get(self._device_id, {})
+        val = device_data.get("temp_set")
+        if val is None:
+            # Common alternative DP numeric indexing for target temperature settings
+            val = device_data.get("3")
+            
+        if val is not None:
+            return float(val)
+        return 50.0
 
     async def async_set_native_value(self, value: float) -> None:
-        """Send target configuration directly onto background worker thread."""
+        """Offload the target slider threshold integer onto background worker thread pools."""
         target_int = int(value)
         await self.hass.async_add_executor_job(self._send_command, target_int)
-        self._attr_native_value = target_int
+        
+        # Optimistically update memory values locally to prevent dashboard slider jumping
+        device_data = self.coordinator.data.setdefault(self._device_id, {})
+        device_data["temp_set"] = target_int
+        device_data["3"] = target_int
         self.async_write_ha_state()
 
-    def _send_command(self, value: int):
-        payload = {"commands": [{"code": "temp_set", "value": value}]}
-        self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
-
-    def update(self):
-        """Update slider tracking position on background thread thread safely."""
+    def _send_command(self, value: int) -> None:
+        """Synchronous write function pushing the slider limit value back up to the panel."""
+        payload = {
+            "commands": [
+                {
+                    "code": "temp_set",
+                    "value": value
+                }
+            ]
+        }
         try:
-            response = self._connector.get(f"/v1.0/iot-03/devices/{self._device_id}/status")
-            if response and response.get("success"):
-                for item in response.get("result", []):
-                    if item.get("code") == "temp_set":
-                        self._attr_native_value = int(item.get("value"))
+            response = self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
+            if not response or not response.get("success"):
+                _LOGGER.error("Tuya Cloud rejected target cutoff temperature update payload: %s", response)
         except Exception as err:
-            _LOGGER.error("Error updating SR208C number: %s", err)
+            _LOGGER.error("Failed to commit target slider change back to SR208C panel hardware: %s", err)
