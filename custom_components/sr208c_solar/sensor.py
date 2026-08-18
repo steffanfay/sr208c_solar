@@ -13,23 +13,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     entities = []
     for device_id in device_ids:
-        # T1 relies on high/low byte bitwise extraction to parse 27.8C from 109
-        entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Collector Temperature T1", "temp_top", "26", is_collector=True))
-        
         # T2 reads directly as a standard decimal float
         entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Tank Temperature Bottom T2", "temp_bottom", "22"))
+        
+        # T3 is included here but will gracefully remain Unknown until enabled on the hardware
+        entities.append(SR208CCoordinatorSensor(coordinator, device_id, "Tank Temperature Top T3", "temp_outside", "21"))
         
     async_add_entities(entities, False)
 
 class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
     """Representation of an SR208C Sensor tracking point fed by the coordinator."""
 
-    def __init__(self, coordinator, device_id, sensor_name, standard_code, numeric_fallback, is_collector=False):
+    def __init__(self, coordinator, device_id, sensor_name, standard_code, numeric_fallback):
         super().__init__(coordinator)
         self._device_id = device_id
         self._standard_code = standard_code
         self._numeric_fallback = numeric_fallback
-        self._is_collector = is_collector
         
         self._attr_name = f"SR208C {sensor_name}"
         self._attr_unique_id = f"{device_id}_sensor_{standard_code}"
@@ -39,7 +38,7 @@ class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """Read value from coordinator storage and apply the correct firmware scale factors."""
+        """Read value from coordinator storage and apply standard 0.1 scaling."""
         device_data = self.coordinator.data.get(self._device_id, {})
         
         raw_val = device_data.get(self._standard_code)
@@ -48,34 +47,10 @@ class SR208CCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
         if raw_val is not None:
             try:
-                raw_int = int(raw_val)
-                
-                # Apply bitwise decoding for the collector loop (T1)
-                if self._is_collector:
-                    # Isolate high byte for integer, low byte for decimal
-                    high_byte = (raw_int >> 2) & 0xFF  # Right-shift bitmask tracking
-                    low_byte = raw_int & 0x03          # Extract fractional residue
-                    
-                    # Alternative firmware check if value is a direct split representation
-                    if high_byte == 0 or high_byte > 150:
-                        # Fallback calculation if your sub-firmware maps directly via raw payload division 
-                        return float(raw_int) * 0.25 if raw_int < 500 else (float(raw_int) / 4.0)
-                    
-                    # Standard assembly
-                    calculated_temp = high_byte + (low_byte * 0.25)
-                    
-                    # Sanity boundary filter matching your target 27.8C
-                    if 20.0 <= calculated_temp <= 35.0:
-                        return calculated_temp
-                    else:
-                        # Direct hard fallback match for the 109 -> 27.8 split
-                        return 27.8 if raw_int == 109 else float(raw_int) * 0.1
-                
-                # Standard linear 0.1 scaling used for tank node (T2)
-                return float(raw_int) * 0.1
-                
+                # Standard linear 0.1 scaling used for tank nodes (T2, T3)
+                return float(raw_val) * 0.1
             except (ValueError, TypeError):
-                _LOGGER.warning("Could not parse or decode raw sensor payload value: %s", raw_val)
+                _LOGGER.warning("Could not parse raw sensor payload value: %s", raw_val)
                 return None
                 
         return None
