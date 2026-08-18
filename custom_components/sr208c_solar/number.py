@@ -31,8 +31,8 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         
         self._attr_name = "Heater Set Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
-        self._attr_device_class = NumberDeviceClass.TEMPERATURE
-        self._attr_unit_of_measurement = UnitOfTemperature.CELSIUS
+        #self._attr_device_class = NumberDeviceClass.TEMPERATURE
+        #self._attr_unit_of_measurement = UnitOfTemperature.CELSIUS
 
         # Safe thermal set boundaries for SR208C plumbing loops
         self._attr_native_min_value = 0
