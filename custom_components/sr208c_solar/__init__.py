@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name="SR208C Data Coordinator",
         update_method=async_update_data,
-        update_interval=timedelta(minutes=config_entry.data["scan_interval_minutes"]),
+        update_interval=timedelta(minutes=entry.data["scan_interval_minutes"]),
     )
 
     # Trigger the first refresh before adding entities so data isn't 'Unknown' on boot
