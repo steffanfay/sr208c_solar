@@ -1,8 +1,9 @@
 import logging
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberDeviceClass
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.const import UnitOfTemperature
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +23,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
     """Slider interface for target heating thresholds linked via Coordinator."""
 
+    _attr_device_class = NumberDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    
+    # Force UI slider steps to only jump in blocks of 5 degrees
+    _attr_native_step = 5
+
     def __init__(self, coordinator, connector, device_id):
         """Initialize the target temperature configuration slider."""
         super().__init__(coordinator)
@@ -30,17 +40,11 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         
         self._attr_name = "Heater Set Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
-        
-        # Safe thermal set boundaries for SR208C plumbing loops
-        self._attr_native_min_value = 0
-        self._attr_native_max_value = 100
-        self._attr_native_step = 1
-        self._attr_entity_category = EntityCategory.CONFIG
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)}, # Links entities sharing this exact ID
+            identifiers={(DOMAIN, self._device_id)},
             name="SR208C Solar Water Heater",
-            manufacturer="Sunsun / Wililo",          # The manufacturing parent standard
+            manufacturer="Sunsun / Wililo",
             model="SR208C",
             sw_version="Tuya Wi-Fi v1.0",
         )
@@ -51,26 +55,37 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
         device_data = self.coordinator.data.get(self._device_id, {})
         val = device_data.get("temp_set")
         if val is None:
-            # Common alternative DP numeric indexing for target temperature settings
             val = device_data.get("3")
             
         if val is not None:
-            return float(val)
+            # Round state value to nearest multiple of 5 for frontend consistency
+            return float(round(float(val) / 5) * 5)
         return 50.0
 
     async def async_set_native_value(self, value: float) -> None:
-        """Offload the target slider threshold integer onto background worker thread pools."""
-        target_int = int(value)
-        await self.hass.async_add_executor_job(self._send_command, target_int)
+        """Asynchronously push the target slider threshold up to the panel in 5-degree blocks."""
+        # Enforce strict 5-degree rounding blocks mathematically
+        target_int = int(round(value / 5) * 5)
         
-        # Optimistically update memory values locally to prevent dashboard slider jumping
-        device_data = self.coordinator.data.setdefault(self._device_id, {})
-        device_data["temp_set"] = target_int
-        device_data["3"] = target_int
-        self.async_write_ha_state()
+        # Guard clause: Stop execution early if target matches current value to save API limits
+        if target_int == int(self.native_value):
+            return
 
-    def _send_command(self, value: int) -> None:
-        """Synchronous write function pushing the slider limit value back up to the panel."""
+        # Move network I/O to native async execution loops
+        success = await self._async_send_command(target_int)
+        
+        if success:
+            # Optimistically update memory values locally to prevent dashboard slider jumping
+            device_data = self.coordinator.data.setdefault(self._device_id, {})
+            device_data["temp_set"] = target_int
+            device_data["3"] = target_int
+            self.async_write_ha_state()
+            
+            # Forces coordinator loop refresh to ensure local sync with the cloud state
+            await self.coordinator.async_request_refresh()
+
+    async def _async_send_command(self, value: int) -> bool:
+        """Asynchronous HTTP post pushing payload states natively back up to the panel."""
         payload = {
             "commands": [
                 {
@@ -80,8 +95,12 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
             ]
         }
         try:
-            response = self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
+            response = await self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
+            
             if not response or not response.get("success"):
                 _LOGGER.error("Tuya Cloud rejected target set temperature update payload: %s", response)
+                return False
+            return True
         except Exception as err:
             _LOGGER.error("Failed to commit target slider change back to SR208C panel hardware: %s", err)
+            return False

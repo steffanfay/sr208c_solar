@@ -2,17 +2,18 @@
 
 This custom Home Assistant integration allows you to seamlessly monitor and control the **SR208C Solar Thermal Water Heater Controller** via the Tuya Cloud API using the thread-isolated `tuya-connector-python` library. 
 
-Unlike basic read-only alternatives, this repository employs a centralized **Data Update Coordinator** pattern to securely read multi-relay temperature telemetry and write state adjustments without spamming or triggering Tuya API rate limiting thresholds.
+It employs a centralized **Data Update Coordinator** pattern to securely read multi-relay temperature telemetry and write state adjustments, while implementing rate-limiting safe-guards to protect your Tuya API threshold quotas.
 
 ## Features
-- **Centralized Data Coordinator**: Single API status lookup cycles every 30 seconds to update all entities simultaneously.
-- **Thread-Isolated Initialization**: Completely isolates blocking I/O calls (`openapi.connect` and `urllib3`) from the main event loop to ensure system stability.
-- **Optimistic State Tracking**: Dashboard control items update immediately in the UI upon click, eliminating delay or "rubber-banding."
+- **Centralized Data Coordinator**: Single API status lookup updates all entities simultaneously. The rate is fully configurable during initial installation, defaulting to 15 minutes.
+- **Thread-Isolated Initialization**: Isolates blocking I/O calls (`openapi.connect` and `urllib3`) from the main event loop to ensure system stability.
+- **Optimistic State Tracking & Rate Safeguards**: Dashboard control items update immediately in the UI upon interaction to prevent "rubber-banding."
+- **API Call Conservation**: The target heater configuration slider operates exclusively in **blocks of 5 degrees Celsius**, rejecting duplicate commands or minor script adjustments to prevent API rate-limit exhaustion.
 - **Supported Control Surfaces**:
   - `sensor`: Linear 0.1x scaling for Tank Bottom (`T2`) and pre-configured hooks for Tank Top (`T3`).
-  - `switch`: Control over the main System Power loop.
+  - `switch`: Control over the main System Power loop `HR`.
   - `select`: Operational system profile modes (`cold`, `heating`, `auto`).
-  - `number`: Native adjustable cutoff temperature slider formatted in degrees Celsius (°C).
+  - `number`: Native adjustable cutoff temperature slider formatted in degrees Celsius (°C) with a strict 5-degree step interval.
 
 ## Limitations
 - **Unsupported**:
@@ -41,7 +42,7 @@ Unlike basic read-only alternatives, this repository employs a centralized **Dat
 
 ## Configuration
 
-- A Tua ya Cloud Developer account is required to obtain your **API Key** and **API Secret**. 
+- A Tuya Cloud Developer account is required to obtain your **API Key** and **API Secret**. 
 - You can create an account and register your device at [https://iot.tuya.com](https://iot.tuya.com).
 - Registering your device will provide you with the necessary **Device ID** for integration.
 - Set your device to **Controllable** mode in the Tuya Developer Portal to enable full read/write access.
@@ -49,11 +50,12 @@ Unlike basic read-only alternatives, this repository employs a centralized **Dat
 ### **Option 1: UI Setup (Recommended)**
 1. Navigate to **Settings → Devices & Services → Add Integration**.
 2. Search for **SR208C Solar Water Heater**.
-3. Enter your Tuya Cloud Developer credentials in the popup form:
+3. Enter your Tuya Cloud Developer credentials and polling preferences in the popup form:
    - **API Key** (Access ID)
    - **API Secret** (Access Secret)
    - **Region** (e.g., `us`, `eu`, `cn`)
    - **Device IDs** (Comma-separated list if tracking multiple units)
+   - **Polling Frequency (Minutes)** (Interval between cloud data refreshes; minimum `1`, default `15`)
 4. Click **Submit**. Every switch, slider, and temperature line will automatically bundle together under a single, unified device profile.
 
 ### **Option 2: Configuration via `configuration.yaml`**
@@ -65,7 +67,8 @@ sr208c_solar:
   api_key: "your_tuya_developer_api_key"
   api_secret: "your_tuya_developer_api_secret"
   region: "us"
-    device_ids:
+  scan_interval_minutes: 15
+  device_ids:
       - "device_id_1"
       - "device_id_2"
 ```
@@ -81,6 +84,9 @@ sr208c_solar:
 ---
 
 ## Troubleshooting
+
+### Target Temperature Slider snaps or rounds to unintended numbers
+- This is by design. To prevent excessive Tuya Cloud API traffic, temperatures are strictly evaluated and updated in blocks of **5°C**. Automations or voice actions that request a value like `52°C` will automatically be adjusted and written to the controller as `50°C`.
 
 ### Temperature Readings show up as `Unknown`
 - Ensure your device has **Controllable device** permissions toggled active inside your Tuya Developer Portal layout.

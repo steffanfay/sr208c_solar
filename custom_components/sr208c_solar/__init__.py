@@ -47,13 +47,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             raise UpdateFailed(f"Error communicating with Tuya Cloud: {err}")
 
-    # Set up the Coordinator to update automatically every 30 seconds
+    # Set up the Coordinator to update automatically as configured in the integration settings
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
         name="SR208C Data Coordinator",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=30),
+        update_interval=timedelta(minutes=config_entry.data["scan_interval_minutes"]),
     )
 
     # Trigger the first refresh before adding entities so data isn't 'Unknown' on boot
