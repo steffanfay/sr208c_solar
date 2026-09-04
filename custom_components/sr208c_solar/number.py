@@ -1,4 +1,6 @@
 import logging
+import functools
+import asyncio
 from homeassistant.components.number import NumberEntity, NumberDeviceClass
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -15,8 +17,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     device_ids = hass.data[DOMAIN][entry.entry_id]["device_ids"]
     
     entities = []
+    # Ensure a single lock is shared across entities using the same connector to
+    # serialize access to the synchronous SDK (urllib3) from multiple entities.
+    lock = hass.data[DOMAIN][entry.entry_id].get("connector_lock")
+    if lock is None:
+        lock = hass.data[DOMAIN][entry.entry_id]["connector_lock"] = asyncio.Lock()
+
     for device_id in device_ids:
-        entities.append(SR208CTargetTempSlider(coordinator, connector, device_id))
+        entities.append(SR208CTargetTempSlider(coordinator, connector, device_id, lock))
         
     async_add_entities(entities, False)
 
@@ -32,11 +40,12 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
     # Force UI slider steps to only jump in blocks of 5 degrees
     _attr_native_step = 5
 
-    def __init__(self, coordinator, connector, device_id):
+    def __init__(self, coordinator, connector, device_id, lock: asyncio.Lock):
         """Initialize the target temperature configuration slider."""
         super().__init__(coordinator)
         self._connector = connector
         self._device_id = device_id
+        self._lock = lock
         
         self._attr_name = "Heater Set Temperature"
         self._attr_unique_id = f"{device_id}_number_temp_set"
@@ -95,8 +104,17 @@ class SR208CTargetTempSlider(CoordinatorEntity, NumberEntity):
             ]
         }
         try:
-            response = await self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
-            
+            # Serialize access to the connector to avoid concurrent blocking calls
+            async with self._lock:
+                # Run the blocking synchronous SDK call in Home Assistant's executor
+                response = await self.hass.async_add_executor_job(
+                    functools.partial(
+                        self._connector.post,
+                        f"/v1.0/iot-03/devices/{self._device_id}/commands",
+                        payload,
+                    )
+                )
+
             if not response or not response.get("success"):
                 _LOGGER.error("Tuya Cloud rejected target set temperature update payload: %s", response)
                 return False

@@ -1,4 +1,6 @@
 import logging
+import functools
+import asyncio
 from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -14,19 +16,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
     device_ids = hass.data[DOMAIN][entry.entry_id]["device_ids"]
     
     entities = []
+    # Create or reuse a shared lock for connector access across entities
+    lock = hass.data[DOMAIN][entry.entry_id].get("connector_lock")
+    if lock is None:
+        lock = hass.data[DOMAIN][entry.entry_id]["connector_lock"] = asyncio.Lock()
+
     for device_id in device_ids:
-        entities.append(SR208CModeSelect(coordinator, connector, device_id))
+        entities.append(SR208CModeSelect(coordinator, connector, device_id, lock))
         
     async_add_entities(entities, False)
 
 class SR208CModeSelect(CoordinatorEntity, SelectEntity):
     """Representation of the system operation mode selector tracking via Coordinator."""
 
-    def __init__(self, coordinator, connector, device_id):
+    def __init__(self, coordinator, connector, device_id, lock: asyncio.Lock):
         """Initialize the selector tied to the coordinator loop."""
         super().__init__(coordinator)
         self._connector = connector
         self._device_id = device_id
+        self._lock = lock
         
         self._attr_name = "Operation Mode"
         self._attr_unique_id = f"{device_id}_select_mode"
@@ -57,16 +65,6 @@ class SR208CModeSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Submit the selected mode configuration back to Tuya Cloud APIs."""
-        await self.hass.async_add_executor_job(self._send_command, option)
-        
-        # Optimistically save state inside the central dictionary for instantaneous UI tracking
-        device_data = self.coordinator.data.setdefault(self._device_id, {})
-        device_data["mode"] = option
-        device_data["2"] = option
-        self.async_write_ha_state()
-
-    def _send_command(self, option: str) -> None:
-        """Synchronous write function execution passing raw parameter strings up to the cloud."""
         payload = {
             "commands": [
                 {
@@ -75,9 +73,27 @@ class SR208CModeSelect(CoordinatorEntity, SelectEntity):
                 }
             ]
         }
+
         try:
-            response = self._connector.post(f"/v1.0/iot-03/devices/{self._device_id}/commands", payload)
+            # Serialize access to connector to avoid concurrent blocking calls
+            async with self._lock:
+                response = await self.hass.async_add_executor_job(
+                    functools.partial(
+                        self._connector.post,
+                        f"/v1.0/iot-03/devices/{self._device_id}/commands",
+                        payload,
+                    )
+                )
             if not response or not response.get("success"):
                 _LOGGER.error("Tuya Cloud rejected the operation mode payload command: %s", response)
         except Exception as err:
             _LOGGER.error("Failed to push configuration mode change to SR208C panel hardware: %s", err)
+
+        # Optimistically save state inside the central dictionary for instantaneous UI tracking
+        device_data = self.coordinator.data.setdefault(self._device_id, {})
+        device_data["mode"] = option
+        device_data["2"] = option
+        self.async_write_ha_state()
+
+    # _send_command removed; network calls are executed in the executor directly from
+    # async_select_option to ensure blocking SDK operations do not run in the event loop.
