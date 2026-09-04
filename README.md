@@ -1,106 +1,98 @@
-# Home Assistant SR208C Solar Water Heater Integration
+# SR208C Solar Water Heater — Home Assistant Integration
 
-This custom Home Assistant integration allows you to seamlessly monitor and control the **SR208C Solar Thermal Water Heater Controller** via the Tuya Cloud API using the thread-isolated `tuya-connector-python` library. 
+GitHub: https://github.com/steffanfay/sr208c_solar
 
-It employs a centralized **Data Update Coordinator** pattern to securely read multi-relay temperature telemetry and write state adjustments, while implementing rate-limiting safe-guards to protect your Tuya API threshold quotas.
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Issues](https://img.shields.io/github/issues/steffanfay/sr208c_solar)
+![Repo Size](https://img.shields.io/github/repo-size/steffanfay/sr208c_solar)
+
+Lightweight Home Assistant integration to monitor and control the SR208C Solar Thermal Water Heater via the Tuya Cloud API. Key benefits: single-coordinator polling, conservative API usage, and safe handling of blocking Tuya SDK calls.
+
+Table of contents
+- Features
+- Requirements & Compatibility
+- Quick start
+- Configuration (UI and YAML)
+- Entities exposed
+- Troubleshooting
+- Development / Contributing
+- Changelog & License
 
 ## Features
-- **Centralized Data Coordinator**: Single API status lookup updates all entities simultaneously. The rate is fully configurable during initial installation, defaulting to 15 minutes.
-- **Thread-Isolated Initialization**: Isolates blocking I/O calls (`openapi.connect` and `urllib3`) from the main event loop to ensure system stability.
-- **Optimistic State Tracking & Rate Safeguards**: Dashboard control items update immediately in the UI upon interaction to prevent "rubber-banding."
-- **API Call Conservation**: The target heater configuration slider operates exclusively in **blocks of 5 degrees Celsius**, rejecting duplicate commands or minor script adjustments to prevent API rate-limit exhaustion.
-- **Supported Control Surfaces**:
-  - `sensor`: Linear 0.1x scaling for Tank Bottom (`T2`) and pre-configured hooks for Tank Top (`T3`).
-  - `switch`: Control over the main System Power loop `HR`.
-  - `select`: Operational system profile modes (`cold`, `heating`, `auto`).
-  - `number`: Native adjustable cutoff temperature slider formatted in degrees Celsius (°C) with a strict 5-degree step interval.
+- Centralized DataUpdateCoordinator to minimize API calls and keep entities in sync
+- Safe handling of blocking Tuya SDK calls (runs synchronous SDK in executor and serializes access with an asyncio.Lock)
+- Optimistic local state updates for responsive UI
+- Target temperature number entity uses 5°C step blocks to conserve API calls
 
-## Limitations
-- **Unsupported**:
-  - Collector temperature T1
-  - Circulation pump R1/PWM
-  - Multiple devices are theoretically supported, but untested
+## Requirements & Compatibility
+- Home Assistant: recommended 2023.6+ (should work on recent HA releases)
+- Python: 3.10+
+- Dependency: tuya-connector-python (bundled or provided by the integration)
 
----
+If you rely on unusual Tuya regions or a different SDK, the integration may require minor adjustments.
 
-## Installation
-
-### Manual Installation
-1. Download this repository's contents.
-2. Place the directory files directly inside your Home Assistant configuration directory under:
-   `/config/custom_components/sr208c_solar/`
-3. Restart Home Assistant.
-
-### HACS (Recommended)
-1. Navigate to **HACS → Integrations** inside Home Assistant.
-2. Click the **three dots** in the top right corner and choose **Custom repositories**.
-3. Paste your repository URL: `https://github.com/steffanfay/sr208c_solar`
-4. Select **Integration** as the category and click **Add**.
-5. Download the integration, then restart your Home Assistant instance.
-
----
+## Quick start (3 steps)
+1. Install the integration (HACS or manual copy into /config/custom_components/sr208c_solar/).
+2. Restart Home Assistant.
+3. Add the integration via Settings → Devices & Services → Add Integration → "SR208C Solar Water Heater" and enter your Tuya developer credentials.
 
 ## Configuration
 
-- A Tuya Cloud Developer account is required to obtain your **API Key** and **API Secret**. 
-- You can create an account and register your device at [https://iot.tuya.com](https://iot.tuya.com).
-- Registering your device will provide you with the necessary **Device ID** for integration.
-- Set your device to **Controllable** mode in the Tuya Developer Portal to enable full read/write access.
-
-### **Option 1: UI Setup (Recommended)**
-1. Navigate to **Settings → Devices & Services → Add Integration**.
-2. Search for **SR208C Solar Water Heater**.
-3. Enter your Tuya Cloud Developer credentials and polling preferences in the popup form:
-   - **API Key** (Access ID)
-   - **API Secret** (Access Secret)
-   - **Region** (e.g., `us`, `eu`, `cn`)
-   - **Device IDs** (Comma-separated list if tracking multiple units)
-   - **Polling Frequency (Minutes)** (Interval between cloud data refreshes; minimum `1`, default `15`)
-4. Click **Submit**. Every switch, slider, and temperature line will automatically bundle together under a single, unified device profile.
-
-### **Option 2: Configuration via `configuration.yaml`**
-Alternatively, you can choose to define your connection string profile manually via code lines:
+YAML example (optional):
 
 ```yaml
-# Example configuration.yaml entry
 sr208c_solar:
   api_key: "your_tuya_developer_api_key"
   api_secret: "your_tuya_developer_api_secret"
   region: "us"
   scan_interval_minutes: 15
   device_ids:
-      - "device_id_1"
-      - "device_id_2"
+    - "device_id_1"
+    - "device_id_2"
 ```
-*Note: Restart your Home Assistant instance after saving your changes to the `configuration.yaml` file.*
 
----
+UI Setup (recommended):
+- Settings → Devices & Services → Add Integration → Search "SR208C Solar Water Heater" → enter API Key, API Secret, Region, Device IDs, Polling interval
 
-## Updating Options
-- If configured via the **UI Flow**, you can reconfigure or swap credential strings on the fly by going to:
-  **Settings → Devices & Services → SR208C Solar Water Heater → Configure**.
-- If using **configuration.yaml**, edit the configuration keys and restart Home Assistant.
+Configuration keys
+- api_key (string) — Tuya Access ID
+- api_secret (string) — Tuya Access Secret
+- region (string) — e.g. us, eu, cn
+- scan_interval_minutes (int) — polling interval in minutes (default 15)
+- device_ids (list) — list of Tuya device IDs to monitor
 
----
+## Entities exposed
+The integration exposes the following entity types (per device):
+
+| Entity | Purpose | DP keys / Notes |
+|---|---:|---|
+| sensor.temp_bottom (T2) | Tank bottom temperature | DP key: `temp_bottom` (fallback `22`), value scaled by 0.1, unit °C |
+| sensor.temp_outside (T3) | Tank top / outside temperature | DP key: `temp_outside` (fallback `21`), value scaled by 0.1, unit °C; may be Unknown if probe missing |
+| switch.heater_relay (HR) | Main system power relay | DP key: `switch` (fallback `1`) |
+| select.mode | Operational mode | Options: `cold`, `heating`, `auto` — DP key `mode` (fallback `2`) |
+| number.temp_set | Target heater set temperature | DP key: `temp_set` (fallback `3`), enforced 5°C step blocks |
+
+Note: DP numeric fallbacks (1,2,3,21,22, etc.) reflect alternate Tuya datapoint mappings observed on some firmwares.
 
 ## Troubleshooting
 
-### Target Temperature Slider snaps or rounds to unintended numbers
-- This is by design. To prevent excessive Tuya Cloud API traffic, temperatures are strictly evaluated and updated in blocks of **5°C**. Automations or voice actions that request a value like `52°C` will automatically be adjusted and written to the controller as `50°C`.
+- "Caught blocking call to putrequest" in Home Assistant logs: prior versions invoked urllib3 synchronously inside the event loop. This integration runs the blocking Tuya SDK methods inside hass.async_add_executor_job and uses an asyncio.Lock to serialize access; update to the latest version of this integration.
+- Target temperature rounding: the number entity enforces 5°C blocks to reduce API usage.
+- Unknown sensor values: ensure the device is set to "Controllable" in the Tuya developer portal and that physical probes are present and enabled.
+- Switch immediately turns off: SR208C hardware may force HR off if it detects an open/floating output; check wiring and operational mode.
 
-### Temperature Readings show up as `Unknown`
-- Ensure your device has **Controllable device** permissions toggled active inside your Tuya Developer Portal layout.
-- The `T3` (Tank Top) sensor will gracefully report as `Unknown` if you do not have an active NTC probe wired into the physical terminal block screws or if it is disabled inside your local hardware menu.
+If you need help, open an issue: https://github.com/steffanfay/sr208c_solar/issues
 
-### System Power Switch instantly turns back off
-- When set to `heating` mode, the SR208C checks for resistance across the **`HR` afterheating output terminal** to protect against floating lines. If you do not have an auxiliary heater or an external isolation relay wired to the `HR` block, the hardware firmware will automatically force the switch back to `OFF` for safety. Switch the operational mode back to `auto` or `cold` to maintain a stable, persistent `ON` loop for your `R1` solar pump lines.
+## Development / Contributing
 
----
+- Fork the repository and open a pull request against main.
+- Local development: copy the integration folder to your HA config's `custom_components/` and restart Home Assistant for iteration.
+- Tests: none included; add unit or integration tests in `tests/` if you implement new functionality.
+- When contributing, include a brief changelog entry and tests where practical.
 
-## Contributing
-Contributions, optimization pull requests, and additional hardware data point mapping expansions are welcome! Feel free to open an issue or submit a pull request against the `main` branch code line.
-
----
+## Changelog & Releases
+- Releases and changelog are published on the GitHub Releases page: https://github.com/steffanfay/sr208c_solar/releases
 
 ## License
-This project is licensed under the MIT License - see the root folder validation properties for details.
+- MIT — see LICENSE in the repository root for details (SPDX: MIT)
+
